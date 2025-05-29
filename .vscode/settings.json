@@ -1,0 +1,6 @@
+{
+    "mplab.clangd.arguments": [
+        "--compile-commands-dir=${workspaceRoot}\\_build\\FreeRTOS\\default"
+    ],
+    "mplab.clangd.path": ""
+}

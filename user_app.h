@@ -8,8 +8,16 @@
 #include "semphr.h"
 
 void config_user_app();
+void config_ports();
 
-void tarefa_teste();
+void acelerador();
+void controle_central();
+void injecao_eletronica();
+
+void config_adc();
+uint16_t read_adc();
+
+void __attribute__((__interrupt__, __auto_psv__)) _INT3Interrupt(void);
 
 #endif	/* USER_APP_H */
 

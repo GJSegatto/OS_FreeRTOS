@@ -10,3 +10,5 @@ cmake/**/.generated/*
 !cmake/**/user.cmake
 _build/
 out/
+Proteus/Project Backups
+Proteus/Proteus/hardware.pdsprj.LAPTOP-JNBQU3BD.gabri.workspace
