@@ -26,49 +26,73 @@ uint16_t read_adc() {
     return ADC1BUF0;
 }
 
+void config_pwm() {
+    TRISDbits.TRISD0 = 0;
+    LATDbits.LATD0 = 0;
+
+    OC1CONbits.OCTSEL = 0;                              //Usa Timer2
+    PR2 = 199;                                          //Periodo do Timer2
+    T2CONbits.TCKPS = 0b00;                             //
+    OC1RS = ((uint16_t)(PR2 + 1) * 0) / 100;            //DC que passa pra OCR1 no estouro de clock
+    OC1R = OC1RS;
+}
+
+void start_pwm(uint16_t new_dc) {
+    uint16_t temp = ((uint16_t)(PR2 + 0) * new_dc) / 100;       //Cálculo do DC
+    OC1RS = temp;                                               //Atribuição do novo DC
+    OC1CONbits.OCM = 0b110;                                     //Ativa modo de PWM
+    T2CONbits.TON = 1;                                          //Inicia o Timer2
+}
+
+void stop_pwm() {
+    OC1CONbits.OCM = 0b000;         //Desativa o PWM
+    T2CONbits.TON = 0;              //Para o Timer2
+    LATDbits.LATD0 = 0;             //Zera a saída do PWM
+}
+
 void config_ports() {
 
     //PINOS
     TRISDbits.TRISD0 = 0;           //Saída de bicos e motor
+    TRISGbits.TRISG0 = 0;           //Saída do freio motor
     TRISAbits.TRISA14 = 1;          //Pino de Interrupção - IN
 
     //INTERRUPÇÃO EXTERNA
     __builtin_enable_interrupts();  //Ativa interrupções externas
-    //INTCON1bits.NSTDIS = 1;         //Desativa interrupções aninhadas
+
     IEC3bits.INT3IE = 1;            //Habilita interrupção externa 3
     INTCON2bits.INT3EP = 0;         //Borda de subida
-    IFS3bits.INT3IF = 0;            //Limpa a flag da interrupção externa 3
     IPC13bits.INT3IP = 0b111;       //Prioridade da interrupção externa (MÁXIMA)
+    IFS3bits.INT3IF = 0;            //Limpa a flag da interrupção externa 3
 }
 
-void __attribute__((__interrupt__, __auto_psv__)) _INT0Interrupt(void) {
-    IFS0bits.INT0IF = 0;
-    while(PORTFbits.RF6) {
-        LATDbits.LATD0 = 1;
+void __attribute__((__interrupt__, __auto_psv__)) _INT3Interrupt(void) {
+    IFS3bits.INT3IF = 0;
+    stop_pwm();
+    while(PORTAbits.RA14) {
+        LATGbits.LATG0 = 1;
     }
-    LATDbits.LATD0 = 0;
+    LATGbits.LATG0 = 0;
+    LATDbits.LATD0 = 1;
+    config_pwm();
+    start_pwm(1);
 }
 
 void acelerador()
 {
+    uint16_t temp = 0;
     while (1) {
-        xSemaphoreTake(mutex, portMAX_DELAY);
-        adc_value = read_adc();
-        xSemaphoreGive(mutex);
+        temp = read_adc();
+        xQueueSend(pipe, &temp, portMAX_DELAY);
         vTaskDelay(10);
     }
 }
 
 void controle_central()
 {
-    while (1) {        
+    while (1) {
         xSemaphoreTake(mutex, portMAX_DELAY);
-        if(adc_value > 500) {
-            LATDbits.LATD0 = 1;
-        }
-        else {
-            LATDbits.LATD0 = 0;
-        }
+        xQueueReceive(pipe, &adc_value, portMAX_DELAY);
         xSemaphoreGive(mutex);
         vTaskDelay(10);
     }
@@ -76,7 +100,17 @@ void controle_central()
 
 void injecao_eletronica()
 {
-    while (1) {        
+    uint16_t dc = 0;
+    while (1) {
+        xSemaphoreTake(mutex, portMAX_DELAY);
+        dc = (uint16_t)((uint32_t)adc_value * 100 / 1023);
+        xSemaphoreGive(mutex);
+
+        if(dc > 0) {
+            start_pwm(dc);
+        } else {
+            stop_pwm();
+        }
         vTaskDelay(10);
     }
 }
@@ -88,4 +122,5 @@ void config_user_app()
     xSemaphoreGive(mutex);
     config_ports();
     config_adc();
+    config_pwm();
 }
