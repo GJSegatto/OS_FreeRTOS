@@ -1,5 +1,4 @@
 #include "user_app.h"
-#include "queue.h"
 
 SemaphoreHandle_t mutex;
 QueueHandle_t pipe;
@@ -13,7 +12,6 @@ void config_adc() {
     AD1CON2bits.VCFG    = 0b011;
     AD1CON1bits.SAMP    = 0;  
     AD1CON1bits.ADON    = 1;            // Liga conversor AD
-
 }
 
 uint16_t read_adc() {
@@ -66,8 +64,7 @@ void config_ports() {
     IFS3bits.INT3IF = 0;            //Limpa a flag da interrupção externa 3
 }
 
-void __attribute__((__interrupt__, __auto_psv__)) _INT3Interrupt(void) {
-    IFS3bits.INT3IF = 0;
+void interruption_handler() {
     stop_pwm();
     while(PORTAbits.RA14) {
         LATGbits.LATG0 = 1;
@@ -76,6 +73,12 @@ void __attribute__((__interrupt__, __auto_psv__)) _INT3Interrupt(void) {
     LATDbits.LATD0 = 1;
     config_pwm();
     start_pwm(1);
+    vTaskDelete(NULL);
+}
+
+void __attribute__((__interrupt__, __auto_psv__)) _INT3Interrupt(void) {        
+    IFS3bits.INT3IF = 0;
+    xTaskCreate(interruption_handler, "int_handler", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 1, NULL);
 }
 
 void acelerador()
